@@ -74,7 +74,7 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None
         args=training_args,
         model=model,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        eval_dataset=eval_dataset, # type: ignore
         data_collator=data_collator,
         compute_metrics=compute_metrics_fn,
     )
@@ -96,7 +96,7 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None
     )
 
     # 6. Сохранение и слияние адаптеров
-    trainer.model.save_pretrained(settings.FINAL_CHECKPOINT_DIR)
+    trainer.model.save_pretrained(settings.FINAL_CHECKPOINT_DIR) # type: ignore
     logger.info("Итоговые адаптеры сохранены в %s", settings.FINAL_CHECKPOINT_DIR)
 
     merge_adapters(settings.FINAL_CHECKPOINT_DIR, settings.MODEL_NAME, output_dir)

@@ -17,7 +17,7 @@ def load_processor(model_name: str) -> WhisperProcessor:
     return WhisperProcessor.from_pretrained(model_name, language="russian", task="transcribe")
 
 
-def load_model_with_lora(model_name: str) -> WhisperForConditionalGeneration:
+def load_model_with_lora(model_name: str):
     logger.info("Загрузка базовой модели %s...", model_name)
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -56,7 +56,7 @@ def merge_adapters(adapter_dir: Path, model_name: str, output_dir: Path) -> None
     peft_model = PeftModel.from_pretrained(base_model, adapter_dir)
 
     logger.info("Слияние весов (merge_and_unload)...")
-    merged_model = peft_model.merge_and_unload()
+    merged_model = peft_model.merge_and_unload() # type: ignore
 
     logger.info("Сохранение готовой модели в %s...", output_dir)
     merged_model.save_pretrained(str(output_dir))
