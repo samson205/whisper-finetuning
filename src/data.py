@@ -28,7 +28,7 @@ def load_manifest_as_dataset(manifest_path: Path, clips_dir: Path) -> Dataset:
         for line in f:
             entry = json.loads(line)
             rows.append({
-                "audio": str(clips_dir.parent / entry["audio_filepath"]),
+                "audio": str(clips_dir / entry["audio_filepath"]),
                 "sentence": entry["text"],
             })
     dataset = Dataset.from_list(rows)
