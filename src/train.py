@@ -6,17 +6,22 @@ from transformers import (
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
 )
+from transformers.trainer_callback import PrinterCallback
 
+from src.logging_utils import setup_logging, FileLoggingCallback
 from src.config import settings
-from src.data import load_manifest_as_dataset
+from src.data import load_manifest_as_dataset, prepare_batch_augmented
 from src.model import load_model_with_lora, load_processor, merge_adapters
+from src.augmentation import AudioAugmenter
 from src.metrics import load_metrics, compute_metrics
 from src.data import prepare_example, DataCollatorSpeechSeq2SeqWithPadding
 
 logger = logging.getLogger(__name__)
 
 
-def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None:
+def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float) -> None:
+    setup_logging(log_file)
+
     # 1. Данные
     logger.info("Загрузка manifest...")
     full_dataset = load_manifest_as_dataset(manifest_path, clips_dir)
@@ -32,7 +37,12 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None
     
     # 3. Препроцессинг
     logger.info("Извлечение признаков из аудио...")
-    train_dataset = train_dataset.map(lambda ex: prepare_example(ex, processor), remove_columns=train_dataset.column_names)
+
+    augmenter = AudioAugmenter(noise_dir=noise_dir, p_augment=p_augment)
+    train_dataset.set_transform(
+        functools.partial(prepare_batch_augmented, processor=processor, augmenter=augmenter)
+    )
+    # train_dataset = train_dataset.map(lambda ex: prepare_example(ex, processor), remove_columns=train_dataset.column_names)
     eval_dataset = eval_dataset.map(lambda ex: prepare_example(ex, processor), remove_columns=eval_dataset.column_names)
 
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
@@ -62,12 +72,13 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None
         per_device_eval_batch_size=1,
         predict_with_generate=True,
         generation_max_length=225,
-        logging_steps=5,
+        logging_steps=2,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
         greater_is_better=False,
         logging_first_step=True,
         weight_decay=0.01,
+        remove_unused_columns=False,
     )
 
     trainer = Seq2SeqTrainer(
@@ -78,6 +89,9 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path) -> None
         data_collator=data_collator,
         compute_metrics=compute_metrics_fn,
     )
+
+    trainer.remove_callback(PrinterCallback)
+    trainer.add_callback(FileLoggingCallback())
 
     # TODO: вынести до подключения LoRA
     logger.info("WER базовой модели (до обучения)...")

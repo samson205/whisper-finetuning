@@ -46,3 +46,20 @@ def prepare_example(example: dict, processor: Any) -> Optional[dict]:
     if len(example["labels"]) > 225:
         example["labels"] = example["labels"][:225]
     return example
+
+
+def prepare_batch_augmented(batch: dict, processor: Any, augmenter) -> dict:
+    input_features_list, labels_list = [], []
+    for audio, sentence in zip(batch["audio"], batch["sentence"]):
+        waveform = augmenter(audio["array"], audio["sampling_rate"])
+        feats = processor.feature_extractor(
+            waveform, sampling_rate=audio["sampling_rate"]
+        ).input_features[0]
+        input_features_list.append(feats)
+
+        labels = processor.tokenizer(sentence).input_ids
+        if len(labels) > 225:
+            labels = labels[:225]
+        labels_list.append(labels)
+
+    return {"input_features": input_features_list, "labels": labels_list}
