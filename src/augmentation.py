@@ -27,7 +27,7 @@ class AudioAugmenter:
         if speed_factor == 1.0:
             return waveform
         speed_transform = T.Speed(sr, speed_factor)
-        augmented = speed_transform(waveform)
+        augmented, _ = speed_transform(waveform)
         return augmented
 
     def __call__(self, np_array: np.ndarray, sr: int) -> np.ndarray:

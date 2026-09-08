@@ -5,6 +5,7 @@ from pathlib import Path
 from transformers import (
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
+    GenerationConfig
 )
 from transformers.trainer_callback import PrinterCallback
 
@@ -32,8 +33,8 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
     logger.info("Train: %d, Eval: %d", len(train_dataset), len(eval_dataset))
 
     # 2. Модель
-    model = load_model_with_lora(settings.MODEL_NAME)
     processor = load_processor(settings.MODEL_NAME)
+    model = load_model_with_lora(settings.MODEL_NAME, processor)
     
     # 3. Препроцессинг
     logger.info("Извлечение признаков из аудио...")
@@ -57,7 +58,7 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
 
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
-        learning_rate=5e-5,
+        learning_rate=1e-4,
         num_train_epochs=5,
         fp16=False,
         max_grad_norm=1.0,
