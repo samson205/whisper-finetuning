@@ -2,6 +2,7 @@ import logging
 import functools
 from pathlib import Path
 
+import torch
 from transformers import (
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments
@@ -19,8 +20,12 @@ from src.data import prepare_example, DataCollatorSpeechSeq2SeqWithPadding
 logger = logging.getLogger(__name__)
 
 
-def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float) -> None:
+def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float, gpu_device: int = 0, memory_fraction: float = 0.5) -> None:
     setup_logging(log_file)
+
+    torch.cuda.set_device(gpu_device)
+    torch.cuda.set_per_process_memory_fraction(memory_fraction, device=gpu_device)
+    logger.info("GPU device=%s, лимит памяти=%.0f%%", gpu_device, memory_fraction * 100)
 
     # 1. Данные
     logger.info("Загрузка manifest...")

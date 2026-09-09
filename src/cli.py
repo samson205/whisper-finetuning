@@ -12,9 +12,11 @@ def main() -> None:
     parser.add_argument("--log-file", type=Path, default=Path("training.log"))
     parser.add_argument("--noise-dir", type=Path, required=False)
     parser.add_argument("--p-augment", type=float, default=0.6)
+    parser.add_argument("--gpu-device", type=int, default=0)
+    parser.add_argument("--memory-fraction", type=float, default=0.5)
     args = parser.parse_args()
 
-    run_training(args.manifest, args.clips_dir, args.output_dir, args.log_file, args.noise_dir, args.p_augment)
+    run_training(args.manifest, args.clips_dir, args.output_dir, args.log_file, args.noise_dir, args.p_augment, args.gpu_device, args.memory_fraction)
 
 if __name__ == "__main__":
     main()
