@@ -1,9 +1,13 @@
 import json
+import random
+import logging
 from typing import Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
 from datasets import Dataset, Audio
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,9 +34,31 @@ def load_manifest_as_dataset(manifest_path: Path, clips_dir: Path) -> Dataset:
             rows.append({
                 "audio": str(clips_dir / entry["audio_filepath"]),
                 "sentence": entry["text"],
+                "category": entry.get("category", "generic"),
             })
     dataset = Dataset.from_list(rows)
     return dataset.cast_column("audio", Audio(sampling_rate=16000))
+
+
+def stratified_train_eval_split(dataset: Dataset, test_size: float = 0.15, seed: int = 42) -> tuple[Dataset, Dataset]:
+    random.seed(seed)
+
+    indicies_by_category = {}
+    for idx, category in enumerate(dataset["category"]):
+        indicies_by_category.setdefault(category, []).append(idx)
+
+    train_indicies, eval_indicies = [], []
+    for category, indicies in indicies_by_category.items():
+        shuffled = indicies.copy()
+        random.shuffle(shuffled)
+        n_eval = max(1, round(len(shuffled) * test_size))
+        eval_indicies.extend(shuffled[:n_eval])
+        train_indicies.extend(shuffled[n_eval:])
+        logger.info("category=%s train=%d eval=%d", category, len(shuffled) - n_eval, n_eval)
+
+    random.shuffle(train_indicies)
+    random.shuffle(eval_indicies)
+    return dataset.select(train_indicies), dataset.select(eval_indicies)
 
 
 def prepare_example(example: dict, processor: Any) -> Optional[dict]:

@@ -4,14 +4,13 @@ from pathlib import Path
 
 from transformers import (
     Seq2SeqTrainer,
-    Seq2SeqTrainingArguments,
-    GenerationConfig
+    Seq2SeqTrainingArguments
 )
 from transformers.trainer_callback import PrinterCallback
 
 from src.logging_utils import setup_logging, FileLoggingCallback
 from src.config import settings
-from src.data import load_manifest_as_dataset, prepare_batch_augmented
+from src.data import load_manifest_as_dataset, prepare_batch_augmented, stratified_train_eval_split
 from src.model import load_model_with_lora, load_processor, merge_adapters
 from src.augmentation import AudioAugmenter
 from src.metrics import load_metrics, compute_metrics
@@ -26,10 +25,8 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
     # 1. Данные
     logger.info("Загрузка manifest...")
     full_dataset = load_manifest_as_dataset(manifest_path, clips_dir)
+    train_dataset, eval_dataset = stratified_train_eval_split(full_dataset, test_size=0.15, seed=42)
 
-    split = full_dataset.train_test_split(test_size=0.15, seed=42)
-    train_dataset = split["train"]
-    eval_dataset = split["test"]
     logger.info("Train: %d, Eval: %d", len(train_dataset), len(eval_dataset))
 
     # 2. Модель
@@ -58,11 +55,13 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
 
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
-        learning_rate=1e-4,
+        learning_rate=5e-5,
         num_train_epochs=5,
         fp16=False,
         max_grad_norm=1.0,
         gradient_checkpointing=True,
+        warmup_steps=40,
+        lr_scheduler_type="cosine",
 
         eval_strategy="epoch",
         # eval_steps=10,

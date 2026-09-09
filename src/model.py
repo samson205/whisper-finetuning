@@ -32,17 +32,27 @@ def load_model_with_lora(model_name: str, processor):
     model = prepare_model_for_kbit_training(model)
     model.gradient_checkpointing_enable()
 
+    target_modules = [
+        name for name, _ in model.named_modules()
+        if (name.startswith("model.encoder") or name.startswith("model.decoder"))
+        and "encoder_attn" not in name
+        and any(
+            name.endswith(suffix) for suffix in (
+                "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.out_proj",
+            )
+        )
+    ]
+
+    logger.info("LoRA target modules count=%d)", len(target_modules))
+
+    assert all("encoder_attn" not in name for name in target_modules)
+    assert all(name.endswith(("q_proj", "k_proj", "v_proj", "out_proj")) for name in target_modules)
+    assert len(target_modules) > 0
+
     lora_config = LoraConfig(
         r=16,
         lora_alpha=32,
-        target_modules=[
-            "self_attn.q_proj",
-            "self_attn.k_proj",
-            "self_attn.v_proj",
-            "self_attn.out_proj",
-            "fc1",
-            "fc2",
-        ],
+        target_modules=target_modules,
         lora_dropout=0.1,
     )
     model = get_peft_model(model, lora_config)
