@@ -17,7 +17,7 @@ def load_processor(model_name: str) -> WhisperProcessor:
     return WhisperProcessor.from_pretrained(model_name, language="russian", task="transcribe")
 
 
-def load_model_with_lora(model_name: str):
+def load_model_with_lora(model_name: str, processor):
     logger.info("Загрузка базовой модели %s...", model_name)
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -26,13 +26,33 @@ def load_model_with_lora(model_name: str):
     )
     model = WhisperForConditionalGeneration.from_pretrained(model_name, quantization_config=bnb_config,)
     model.config.use_cache = False
+    model.generation_config.language = "ru" # type: ignore
+    model.generation_config.task = "transcribe" # type: ignore
+    model.generation_config.forced_decoder_ids = processor.get_decoder_prompt_ids(language="russian", task="transcribe") # type: ignore
     model = prepare_model_for_kbit_training(model)
     model.gradient_checkpointing_enable()
+
+    target_modules = [
+        name for name, _ in model.named_modules()
+        if (name.startswith("model.encoder") or name.startswith("model.decoder"))
+        and "encoder_attn" not in name
+        and any(
+            name.endswith(suffix) for suffix in (
+                "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.out_proj",
+            )
+        )
+    ]
+
+    logger.info("LoRA target modules count=%d)", len(target_modules))
+
+    assert all("encoder_attn" not in name for name in target_modules)
+    assert all(name.endswith(("q_proj", "k_proj", "v_proj", "out_proj")) for name in target_modules)
+    assert len(target_modules) > 0
 
     lora_config = LoraConfig(
         r=16,
         lora_alpha=32,
-        target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],
+        target_modules=target_modules,
         lora_dropout=0.1,
     )
     model = get_peft_model(model, lora_config)
