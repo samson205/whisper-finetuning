@@ -24,8 +24,22 @@ def main() -> None:
     parser.add_argument("--warmup-steps", type=int, default=40)
     args = parser.parse_args()
 
-    run_training(args.manifest, args.clips_dir, args.output_dir, args.log_file, args.noise_dir, args.p_augment, args.gpu_device, args.memory_fraction,
-                 args.lora_r, args.lora_alpha, args.learning_rate, args.num_epochs, args.warmup_steps)
+    run_training(
+        args.manifest,
+        args.clips_dir,
+        args.output_dir,
+        args.log_file,
+        args.noise_dir,
+        args.p_augment,
+        args.gpu_device,
+        args.memory_fraction,
+        args.lora_r,
+        args.lora_alpha,
+        args.learning_rate,
+        args.num_epochs,
+        args.warmup_steps,
+    )
+
 
 if __name__ == "__main__":
     main()

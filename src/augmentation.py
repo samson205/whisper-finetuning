@@ -8,17 +8,21 @@ from audiomentations import Gain, AddGaussianSNR, AddBackgroundNoise, Compose
 
 
 class AudioAugmenter:
-    def __init__(self, sr: int = 16000, p_augment: float = 0.6, noise_dir: Path | None = None) -> None:
+    def __init__(
+        self, sr: int = 16000, p_augment: float = 0.6, noise_dir: Path | None = None
+    ) -> None:
         self._sr = sr
         self._p_augment = p_augment
 
         transforms = [
             Gain(min_gain_db=-6, max_gain_db=6, p=0.5),
-            AddGaussianSNR(min_snr_db=10, max_snr_db=30, p=0.4)
+            AddGaussianSNR(min_snr_db=10, max_snr_db=30, p=0.4),
         ]
         if noise_dir:
             transforms.append(
-                AddBackgroundNoise(sounds_path=noise_dir, min_snr_db=5, max_snr_db=20, p=0.4)
+                AddBackgroundNoise(
+                    sounds_path=noise_dir, min_snr_db=5, max_snr_db=20, p=0.4
+                )
             )
         self._pipeline = Compose(transforms)
 
@@ -40,4 +44,3 @@ class AudioAugmenter:
         np_wave = waveform.squeeze(0).numpy().astype(np.float32)
         np_wave = self._pipeline(np_wave, sr)
         return np_wave
-        

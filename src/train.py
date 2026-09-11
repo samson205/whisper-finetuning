@@ -3,15 +3,16 @@ import functools
 from pathlib import Path
 
 import torch
-from transformers import (
-    Seq2SeqTrainer,
-    Seq2SeqTrainingArguments
-)
+from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
 from transformers.trainer_callback import PrinterCallback
 
 from src.logging_utils import setup_logging, FileLoggingCallback
 from src.config import settings
-from src.data import load_manifest_as_dataset, prepare_batch_augmented, stratified_train_eval_split
+from src.data import (
+    load_manifest_as_dataset,
+    prepare_batch_augmented,
+    stratified_train_eval_split,
+)
 from src.model import load_model_with_lora, load_processor, merge_adapters
 from src.augmentation import AudioAugmenter
 from src.metrics import load_metrics, compute_metrics
@@ -20,7 +21,21 @@ from src.data import prepare_example, DataCollatorSpeechSeq2SeqWithPadding
 logger = logging.getLogger(__name__)
 
 
-def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float, gpu_device: int, memory_fraction: float, lora_r: int, lora_alpha: int, lr: float, num_epochs: int, warmup_steps: int) -> None:
+def run_training(
+    manifest_path: Path,
+    clips_dir: Path,
+    output_dir: Path,
+    log_file: Path,
+    noise_dir: Path | None,
+    p_augment: float,
+    gpu_device: int,
+    memory_fraction: float,
+    lora_r: int,
+    lora_alpha: int,
+    lr: float,
+    num_epochs: int,
+    warmup_steps: int,
+) -> None:
     setup_logging(log_file)
 
     torch.cuda.set_device(gpu_device)
@@ -30,34 +45,42 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
     # 1. Данные
     logger.info("Загрузка manifest...")
     full_dataset = load_manifest_as_dataset(manifest_path, clips_dir)
-    train_dataset, eval_dataset = stratified_train_eval_split(full_dataset, test_size=0.15, seed=42)
+    train_dataset, eval_dataset = stratified_train_eval_split(
+        full_dataset, test_size=0.15, seed=42
+    )
 
     logger.info("Train: %d, Eval: %d", len(train_dataset), len(eval_dataset))
 
     # 2. Модель
     processor = load_processor(settings.MODEL_NAME)
     model = load_model_with_lora(settings.MODEL_NAME, processor, lora_r, lora_alpha)
-    
+
     # 3. Препроцессинг
     logger.info("Извлечение признаков из аудио...")
 
     augmenter = AudioAugmenter(noise_dir=noise_dir, p_augment=p_augment)
     train_dataset.set_transform(
-        functools.partial(prepare_batch_augmented, processor=processor, augmenter=augmenter)
+        functools.partial(
+            prepare_batch_augmented, processor=processor, augmenter=augmenter
+        )
     )
     # train_dataset = train_dataset.map(lambda ex: prepare_example(ex, processor), remove_columns=train_dataset.column_names)
-    eval_dataset = eval_dataset.map(lambda ex: prepare_example(ex, processor), remove_columns=eval_dataset.column_names)
+    eval_dataset = eval_dataset.map(
+        lambda ex: prepare_example(ex, processor),
+        remove_columns=eval_dataset.column_names,
+    )
 
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=processor)
 
     # 4. Метрика
     wer_metric = load_metrics()
-    compute_metrics_fn = functools.partial(compute_metrics, processor=processor, wer_metric=wer_metric)
+    compute_metrics_fn = functools.partial(
+        compute_metrics, processor=processor, wer_metric=wer_metric
+    )
 
     # 5. Трейнер
     training_args = Seq2SeqTrainingArguments(
         output_dir="./whisper-lora-checkpoints",
-
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
         learning_rate=lr,
@@ -67,13 +90,11 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
         gradient_checkpointing=True,
         warmup_steps=warmup_steps,
         lr_scheduler_type="cosine",
-
         eval_strategy="epoch",
         # eval_steps=10,
         save_strategy="epoch",
         save_total_limit=3,
         # save_steps=10,
-
         per_device_eval_batch_size=1,
         predict_with_generate=True,
         generation_max_length=225,
@@ -90,7 +111,7 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
         args=training_args,
         model=model,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset, # type: ignore
+        eval_dataset=eval_dataset,  # type: ignore
         data_collator=data_collator,
         compute_metrics=compute_metrics_fn,
     )
@@ -110,13 +131,17 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
     logger.info("WER ПОСЛЕ обучения: %.4f", final_metrics["eval_wer"])
     logger.info(
         "Изменение: %.4f -> %.4f (%s)",
-        base_metrics["eval_wer"], final_metrics["eval_wer"],
-        "улучшение" if final_metrics["eval_wer"] < base_metrics["eval_wer"] else "ухудшение/без изменений",
+        base_metrics["eval_wer"],
+        final_metrics["eval_wer"],
+        (
+            "улучшение"
+            if final_metrics["eval_wer"] < base_metrics["eval_wer"]
+            else "ухудшение/без изменений"
+        ),
     )
 
     # 6. Сохранение и слияние адаптеров
-    trainer.model.save_pretrained(settings.FINAL_CHECKPOINT_DIR) # type: ignore
+    trainer.model.save_pretrained(settings.FINAL_CHECKPOINT_DIR)  # type: ignore
     logger.info("Итоговые адаптеры сохранены в %s", settings.FINAL_CHECKPOINT_DIR)
 
     merge_adapters(settings.FINAL_CHECKPOINT_DIR, settings.MODEL_NAME, output_dir)
-    
