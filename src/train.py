@@ -20,7 +20,7 @@ from src.data import prepare_example, DataCollatorSpeechSeq2SeqWithPadding
 logger = logging.getLogger(__name__)
 
 
-def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float, gpu_device: int = 0, memory_fraction: float = 0.5) -> None:
+def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_file: Path, noise_dir: Path | None, p_augment: float, gpu_device: int, memory_fraction: float, lora_r: int, lora_alpha: int, lr: float, num_epochs: int, warmup_steps: int) -> None:
     setup_logging(log_file)
 
     torch.cuda.set_device(gpu_device)
@@ -36,7 +36,7 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
 
     # 2. Модель
     processor = load_processor(settings.MODEL_NAME)
-    model = load_model_with_lora(settings.MODEL_NAME, processor)
+    model = load_model_with_lora(settings.MODEL_NAME, processor, lora_r, lora_alpha)
     
     # 3. Препроцессинг
     logger.info("Извлечение признаков из аудио...")
@@ -60,12 +60,12 @@ def run_training(manifest_path: Path, clips_dir: Path, output_dir: Path, log_fil
 
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
-        learning_rate=5e-5,
-        num_train_epochs=5,
+        learning_rate=lr,
+        num_train_epochs=num_epochs,
         fp16=False,
         max_grad_norm=1.0,
         gradient_checkpointing=True,
-        warmup_steps=40,
+        warmup_steps=warmup_steps,
         lr_scheduler_type="cosine",
 
         eval_strategy="epoch",

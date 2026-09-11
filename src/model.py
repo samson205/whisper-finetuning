@@ -17,7 +17,7 @@ def load_processor(model_name: str) -> WhisperProcessor:
     return WhisperProcessor.from_pretrained(model_name, language="russian", task="transcribe")
 
 
-def load_model_with_lora(model_name: str, processor):
+def load_model_with_lora(model_name: str, processor, lora_r: int, lora_alpha: int):
     logger.info("Загрузка базовой модели %s...", model_name)
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -50,8 +50,8 @@ def load_model_with_lora(model_name: str, processor):
     assert len(target_modules) > 0
 
     lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
+        r=lora_r,
+        lora_alpha=lora_alpha,
         target_modules=target_modules,
         lora_dropout=0.1,
     )
